@@ -4,7 +4,7 @@ from subprocess import Popen, PIPE, call
 
 datasets = ["DoubleEG", "SingleElectron", "SingleMuon", "JetHT"]
 
-eos_base = "/eos/cms/store/group/phys_smp/cojacob/BetterCnC/"
+eos_base = "/eos/cms/store/group/phys_smp/cojacob/AdvCnC/"
 
 def combine_root_files(sets):
     for dataset in sets:

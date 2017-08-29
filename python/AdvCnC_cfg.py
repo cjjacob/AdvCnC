@@ -33,7 +33,7 @@ process.AdvCnC = cms.EDAnalyzer('AdvCnC',
     refPath  = cms.untracked.string("HLT_Ele27_WPTight_Gsf_v"),
     pathName = cms.untracked.string("HLT_Ele23_Ele12_CaloIdL_TrackIdL_IsoVL_DZ_v"),
 
-#    refFilter = cms.untracked.string("hltEle27WPTightGsfTrackIsoFilter"),
+    refFilter = cms.untracked.string("hltEle27WPTightGsfTrackIsoFilter"),
     pathFilterLeg1 = cms.untracked.string("hltEle23Ele12CaloIdLTrackIdLIsoVLTrackIsoLeg1Filter"),
     pathFilterLeg2 = cms.untracked.string("hltEle23Ele12CaloIdLTrackIdLIsoVLTrackIsoLeg2Filter"),
 

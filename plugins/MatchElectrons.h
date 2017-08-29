@@ -45,7 +45,17 @@ vector<TriggerObjectStandAlone> ObjectsWithAFilter(const vector<TriggerObjectSta
 
 vector< pair<Electron,TLorentzVector> > MatchElesWithObjs(const vector<Electron>& eles, const vector<TriggerObjectStandAlone>& objs, const double& dR=0.2);
 
-inline pair<Electron,TLorentzVector> make_pair(const Electron& e, const TLorentzVector& o);
+vector< pair<Electron,TriggerObjectStandAlone> > MatchElesWithFullObjs(const vector<Electron>& eles, const vector<TriggerObjectStandAlone>& objs, const double& dR=0.2);
+
+vector<TriggerObjectStandAlone> FilterObjectsByType(const vector<TriggerObjectStandAlone>& objs, const int& type);
+
+vector<TriggerObjectStandAlone> FilterObjectsByType(const vector<TriggerObjectStandAlone>& objs, const vector<int>& types);
+
+template <class A, class B>
+inline pair<A,B> make_pair(const A& a, const B& b)
+{
+  return pair<A,B>(a,b);
+}
 
 #endif // MATCH_ELECTRONS
 

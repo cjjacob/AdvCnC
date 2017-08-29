@@ -66,8 +66,7 @@ vector<TriggerObjectStandAlone> ObjectsWithPath(const vector<TriggerObjectStandA
 }
 
 vector<TriggerObjectStandAlone> ObjectsWithAFilter(const vector<TriggerObjectStandAlone>& trObjs, const TriggerNames& names, const string& trFilter)
-{
-  
+{  
   return ObjectsWithAFilter(trObjs, names, vector<string>(1,trFilter));
 }
 
@@ -122,7 +121,52 @@ vector< pair<Electron,TLorentzVector> > MatchElesWithObjs(const vector<Electron>
   return retvec;
 }
 
-inline pair<Electron,TLorentzVector> make_pair(const Electron& e, const TLorentzVector& o)
+vector< pair<Electron,TriggerObjectStandAlone> > MatchElesWithFullObjs(const vector<Electron>& eles, const vector<TriggerObjectStandAlone>& objs, const double& dR)
 {
-  return pair<Electron,TLorentzVector>(e,o);
+  vector< pair<Electron,TriggerObjectStandAlone> > retvec;
+
+  for ( Electron e : eles ) {
+    TLorentzVector tlvEle;
+    tlvEle.SetPtEtaPhiM( e.pt(), e.eta(), e.phi(), ELE_MASS );
+    double dr_best = dR;
+    bool matched = false;
+    TriggerObjectStandAlone bestMatch;
+
+    for ( TriggerObjectStandAlone o : objs ) {
+      if ( !(o.type(82) || o.type(92)) ) { continue; } // must be ele or SC object
+      TLorentzVector tlvObj;
+      tlvObj.SetPtEtaPhiM( o.pt(), o.eta(), o.phi(), ELE_MASS );
+      double dr_current = tlvEle.DeltaR(tlvObj);
+      if ( dr_current < dr_best ) {
+	matched = true;
+	bestMatch = o;
+	dr_best = dr_current;
+      }
+    }
+
+    if ( matched ) { retvec.push_back( make_pair(e, bestMatch) ); }
+  }
+
+  return retvec;
+}
+
+vector<TriggerObjectStandAlone> FilterObjectsByType(const vector<TriggerObjectStandAlone>& objs, const int& type)
+{
+  return FilterObjectsByType(objs, vector<int>(1,type));
+}
+
+vector<TriggerObjectStandAlone> FilterObjectsByType(const vector<TriggerObjectStandAlone>& objs, const vector<int>& types)
+{
+  vector<TriggerObjectStandAlone> retvec;
+  
+  for ( TriggerObjectStandAlone o : objs ) {
+    for ( int t : types ) {
+      if ( o.type(t) ) {
+	retvec.push_back(o);
+	break;
+      }
+    }
+  }
+  
+  return retvec;
 }

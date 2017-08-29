@@ -86,7 +86,7 @@ class AdvCnC : public edm::one::EDAnalyzer<edm::one::SharedResources>  {
   EDGetTokenT<TriggerObjectStandAloneCollection> objects_;
   EDGetTokenT<TriggerResults> results_;
 
-  string triggerName, pathFilterLeg1, pathFilterLeg2;
+  string triggerName, pathFilterLeg1, pathFilterLeg2, refTrigName, refFilter;
 
   TH3D* EtaEtaMPass;
   TH3D* EtaEtaMFail;
@@ -105,6 +105,15 @@ class AdvCnC : public edm::one::EDAnalyzer<edm::one::SharedResources>  {
 
   TH3D* ZPass_justEles;
   TH3D* ZFail_justEles;
+
+  TH3D* EtaEtaZPt;
+  TH3D* EtaEtaZPz;
+  TH3D* EtaEtaZP;
+
+  TH3D* EtaEtaMPass_SingleLeg1;
+  TH3D* EtaEtaMFail_SingleLeg1;
+  TH3D* EtaEtaMPass_SingleLeg2;
+  TH3D* EtaEtaMFail_SingleLeg2;
 
   TH1D* MPass;
   TH1D* MFail;
@@ -154,6 +163,8 @@ AdvCnC::AdvCnC(const edm::ParameterSet& iConfig)
    triggerName = iConfig.getUntrackedParameter<string>("pathName", "HLT_Ele23_Ele12_CaloIdL_TrackIdL_IsoVL_DZ_v");
    pathFilterLeg1 = iConfig.getUntrackedParameter<string>("pathFilterLeg1");
    pathFilterLeg2 = iConfig.getUntrackedParameter<string>("pathFilterLeg2");
+   refTrigName = iConfig.getUntrackedParameter<string>("refPath");
+   refFilter = iConfig.getUntrackedParameter<string>("refFilter");
 
    nTrigFound = 0UL; nTrigRun = 0UL; nTrigAccept = 0UL;
 }
@@ -201,9 +212,12 @@ AdvCnC::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
     return;
   }
 
+  vector<int> EMtypes; EMtypes.push_back(82); EMtypes.push_back(92);
+  vector<TriggerObjectStandAlone> EMObjects = FilterObjectsByType(*objects, EMtypes);
+
   vector<string> filters; filters.push_back(pathFilterLeg1); filters.push_back(pathFilterLeg2);
-  vector<TriggerObjectStandAlone> filterObjs = ObjectsWithAFilter(*objects, TrigNames, filters);
-  vector<TriggerObjectStandAlone> pathObjs = ObjectsWithPath(*objects, TrigNames, triggerName+"*");
+  vector<TriggerObjectStandAlone> filterObjs = ObjectsWithAFilter(EMObjects, TrigNames, filters);
+  vector<TriggerObjectStandAlone> pathObjs = ObjectsWithPath(EMObjects, TrigNames, triggerName+"*");
 
   nTrigObjsFilt->Fill(filterObjs.size());
   nTrigObjsPath->Fill(pathObjs.size());
@@ -271,6 +285,9 @@ AdvCnC::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
     if ( e1.first.charge() * e2.first.charge() < 0.0 
 	 && fabs(Z.M() - 91.0) <= 30.0 ) {
       if ( results->wasrun(triggerIndex) ) {
+	EtaEtaZPt->Fill(e1.second.Eta(), e2.second.Eta(), Z.Pt());
+	EtaEtaZPz->Fill(e1.second.Eta(), e2.second.Eta(), Z.Pz());
+	EtaEtaZP->Fill(e1.second.Eta(), e2.second.Eta(), Z.P());
 	if ( results->accept(triggerIndex) ) {
 	  EtaEtaMPass_justEles->Fill(e1.second.Eta(), e2.second.Eta(), Z.M());
 	}
@@ -281,7 +298,38 @@ AdvCnC::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
     }
   }
 
-  vector<ZBoson> matchedZs = MatchedZCands(matchedEles);
+  // vector<ZBoson> matchedZs = MatchedZCands(matchedEles);
+
+  if ( results->wasrun(triggerIndex) ) {
+    vector<TriggerObjectStandAlone> refObjs = ObjectsWithPath(EMObjects, TrigNames, refTrigName+"*");
+    vector< pair<Electron,TLorentzVector> > matchedRef = MatchElesWithObjs(goodElectrons, refObjs);
+    vector< pair<Electron,TriggerObjectStandAlone> > ObjMatchedEles = MatchElesWithFullObjs(goodElectrons, EMObjects);
+    if ( matchedRef.size() > 0 ) {
+      for ( auto refEle : matchedRef ) {
+	for ( auto oEle : ObjMatchedEles ) {
+	  TLorentzVector tlvObjEle;
+	  tlvObjEle.SetPtEtaPhiM( oEle.second.pt(), oEle.second.eta(), oEle.second.phi(), ELE_MASS );
+	  if ( refEle.second.DeltaR(tlvObjEle) < 0.2 ) { continue; } // don't want to use self
+
+	  TLorentzVector Z = refEle.second + tlvObjEle;
+
+	  if ( oEle.second.hasFilterLabel(pathFilterLeg1) ) {
+	    EtaEtaMPass_SingleLeg1->Fill( refEle.second.Eta(), tlvObjEle.Eta(), Z.M() );
+	  }
+	  else {
+	    EtaEtaMFail_SingleLeg1->Fill( refEle.second.Eta(), tlvObjEle.Eta(), Z.M() );
+	  }
+
+	  if ( oEle.second.hasFilterLabel(pathFilterLeg2) ) {
+	    EtaEtaMPass_SingleLeg2->Fill( refEle.second.Eta(), tlvObjEle.Eta(), Z.M() );
+	  }
+	  else{
+	    EtaEtaMFail_SingleLeg2->Fill( refEle.second.Eta(), tlvObjEle.Eta(), Z.M() );
+	  }
+	}
+      }
+    }
+  }
 
 }
 
@@ -295,6 +343,7 @@ AdvCnC::beginJob()
   TFileDirectory NoPtCut    = fs->mkdir("NoPtCut");
   TFileDirectory Numbers    = fs->mkdir("Numbers");
   TFileDirectory JustEles   = fs->mkdir("JustEles");
+  TFileDirectory SingleLeg  = fs->mkdir("SingleLeg");
 
   nEventEles = Numbers.make<TH1D>("nEventEles", "Num. of Electrons;#", 7, -0.5, 6.5);
   nGoodEles = Numbers.make<TH1D>("nGoodEles", "Num. of Electrons |#eta| < 2.5, E_{T} > 5 GeV;#", 7, -0.5, 6.5);
@@ -334,6 +383,16 @@ AdvCnC::beginJob()
 
   MPass_noPtCut = NoPtCut.make<TH1D>("MPass_noPtCut", "Z mass Pass;m_{Z}", nMassBins, massBins);
   MFail_noPtCut = NoPtCut.make<TH1D>("MFail_noPtCut", "Z mass Fail;m_{Z}", nMassBins, massBins);
+
+  EtaEtaZPt = JustEles.make<TH3D>("EtaEtaZPt", "#eta #eta p_{T,Z};#eta_{e1};#eta_{e2};p_{T,Z} (GeV)", nEtaBins, etaBins, nEtaBins, etaBins, nPtBins, ptBins);
+  EtaEtaZPz = JustEles.make<TH3D>("EtaEtaZPz", "#eta #eta p_{z,Z};#eta_{e1};#eta_{e2};p_{z,Z} (GeV)", nEtaBins, etaBins, nEtaBins, etaBins, nPtBins, ptBins);
+  EtaEtaZP  = JustEles.make<TH3D>("EtaEtaZP",  "#eta #eta p_{Z};#eta_{e1};#eta_{e2};p_{Z} (GeV)",     nEtaBins, etaBins, nEtaBins, etaBins, nPtBins, ptBins);
+
+  EtaEtaMPass_SingleLeg1 = SingleLeg.make<TH3D>("EtaEtaMPass_SingleLeg1", "Leg 1 #eta_{tag} #eta_{probe} Pass;#eta_{tag};#eta_{probe};m_{ee} (GeV)", nEtaBins, etaBins, nEtaBins, etaBins, nMassBins, massBins);
+  EtaEtaMFail_SingleLeg1 = SingleLeg.make<TH3D>("EtaEtaMFail_SingleLeg1", "Leg 1 #eta_{tag} #eta_{probe} Fail;#eta_{tag};#eta_{probe};m_{ee} (GeV)", nEtaBins, etaBins, nEtaBins, etaBins, nMassBins, massBins);
+  EtaEtaMPass_SingleLeg2 = SingleLeg.make<TH3D>("EtaEtaMPass_SingleLeg2", "Leg 2 #eta_{tag} #eta_{probe} Pass;#eta_{tag};#eta_{probe};m_{ee} (GeV)", nEtaBins, etaBins, nEtaBins, etaBins, nMassBins, massBins);
+  EtaEtaMFail_SingleLeg2 = SingleLeg.make<TH3D>("EtaEtaMFail_SingleLeg2", "Leg 2 #eta_{tag} #eta_{probe} Fail;#eta_{tag};#eta_{probe};m_{ee} (GeV)", nEtaBins, etaBins, nEtaBins, etaBins, nMassBins, massBins);
+
 }
 
 // ------------ method called once each job just after ending the event loop  ------------
