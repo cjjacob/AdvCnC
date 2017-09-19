@@ -4,7 +4,7 @@ vector<Electron> GoodElectrons(const vector<Electron>& slimmedElectrons)
 {
   vector<Electron> retvec;
 
-  for ( Electron e : slimmedElectrons ) {
+  for ( const Electron& e : slimmedElectrons ) {
     if ( e.et() > 5.0 && fabs(e.eta()) < 2.5 ) {
       retvec.push_back(e);
     }
@@ -13,24 +13,12 @@ vector<Electron> GoodElectrons(const vector<Electron>& slimmedElectrons)
   return retvec;
 }
 
-vector<Electron> ApplyMediumID(const vector<Electron>& electrons)
+vector<Electron> ApplyMediumID(const vector<Electron>& electrons, const double& rho)
 {
   vector<Electron> retvec;
 
-  for ( Electron e : electrons ) {
-    if ( fabs( (1.0/e.energy()) - (1.0/e.p()) ) < 0.05
-	 && e.ecalPFClusterIso() < 0.15 
-	 && ( ( fabs(e.eta()) <= 1.479
-	        && e.sigmaIetaIeta() < 0.01
-		&& e.hcalOverEcal() < 0.12
-	      )
-	      ||
-	      ( fabs(e.eta()) > 1.479 && fabs(e.eta()) < 2.5
-	        && e.sigmaIetaIeta() < 0.03
-		&& e.hcalOverEcal() < 0.10
-	      ) 
-            ) 
-       ) {
+  for ( const Electron& e : electrons ) {
+    if ( IDCUTS::ApplyElectronID(rho, e, IDCUTS::MEDIUM_ID) ) {
       retvec.push_back(e);
     }
   }
@@ -42,7 +30,7 @@ vector<Electron> ElectronsAbovePtThreshold(const vector<Electron>& eles, const d
 {
   vector<Electron> retvec;
 
-  for ( Electron e : eles ) {
+  for ( const Electron& e : eles ) {
     if ( e.pt() >= ptCut ) {
       retvec.push_back(e);
     }

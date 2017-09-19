@@ -23,6 +23,7 @@
 #include <TMath.h>
 
 // personal includes
+#include "IDCuts.h"
 
 using namespace std;
 using namespace reco;
@@ -33,7 +34,7 @@ const double ELE_MASS = 0.000511;
 
 vector<Electron> GoodElectrons(const vector<Electron>& slimmedElectrons);
 
-vector<Electron> ApplyMediumID(const vector<Electron>& electrons);
+vector<Electron> ApplyMediumID(const vector<Electron>& electrons, const double& rho);
 
 vector<Electron> ElectronsAbovePtThreshold(const vector<Electron>& eles, const double& ptCut = 25.0);
 

@@ -5,7 +5,7 @@ process = cms.Process("AdvCnC")
 process.load("FWCore.MessageService.MessageLogger_cfi")
 
 process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
-process.MessageLogger.cerr.FwkReport.reportEvery = cms.untracked.int32(10000)
+process.MessageLogger.cerr.FwkReport.reportEvery = cms.untracked.int32(50000)
 
 import TriggerTools.AdvCnC.ROOTfiles_cff as DataFiles
 
@@ -29,6 +29,9 @@ process.AdvCnC = cms.EDAnalyzer('AdvCnC',
     electrons = cms.InputTag("slimmedElectrons"),
     results = cms.InputTag("TriggerResults","","HLT"),
     objects = cms.InputTag("selectedPatTrigger"),
+
+    rho = cms.InputTag("fixedGridRhoAll"),
+    beamspot = cms.InputTag("offlineBeamSpot"),
 
     refPath  = cms.untracked.string("HLT_Ele27_WPTight_Gsf_v"),
     pathName = cms.untracked.string("HLT_Ele23_Ele12_CaloIdL_TrackIdL_IsoVL_DZ_v"),

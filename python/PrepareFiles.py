@@ -1,10 +1,11 @@
 import os
 import ROOT
 from subprocess import Popen, PIPE, call
+from array import *
 
 datasets = ["DoubleEG", "SingleElectron", "SingleMuon", "JetHT"]
 
-eos_base = "/eos/cms/store/group/phys_smp/cojacob/AdvCnC/"
+eos_base = "/eos/cms/store/group/phys_smp/cojacob/"
 
 def combine_root_files(sets):
     for dataset in sets:
@@ -56,6 +57,11 @@ def make_efficiencies_simple(sets):
         eem_p_je_proj = ROOT.TH2D()
         eem_f_je_proj = ROOT.TH2D()
 
+        eta1p = ROOT.TH1D()
+        eta1f = ROOT.TH1D()
+        eta2p = ROOT.TH1D()
+        eta2f = ROOT.TH1D()
+
         print "Doing projections... ",
 
         print "EtaEtaM ",
@@ -79,14 +85,36 @@ def make_efficiencies_simple(sets):
         eem_a_je_proj.Add(eem_f_je_proj)
         EtaEtaJustElesEff = ROOT.TEfficiency(eem_p_je_proj, eem_a_je_proj)
 
+        eta1p = eem_p_je.Project3D("x")
+        eta1f = eem_f_je.Project3D("x")
+        eta1a = eta1p.Clone()
+        eta1a.Add(eta1f)
+        Eta1Eff = ROOT.TEfficiency(eta1p, eta1a)
+        eta2p = eem_p_je.Project3D("y")
+        eta2f = eem_f_je.Project3D("y")
+        eta2a = eta2p.Clone()
+        eta2a.Add(eta2f)
+        Eta2Eff = ROOT.TEfficiency(eta2p, eta2a)
+
+        etaBins = array('d', [-2.5, -2.0, -1.6, -1.4, -0.8, 0.0, 0.8, 1.4, 1.6, 2.0, 2.5])
+        nEtaBins = 10
+        MangledEtaEtaEff = ROOT.TH2D("MangledEtaEtaEff", "Mangled #eta_{1} #eta_{2} Eff;#eta_{1};#eta_{2}", nEtaBins, etaBins, nEtaBins, etaBins)
+        for e1 in range(12):
+            for e2 in range(12):
+                MangledEtaEtaEff.SetBinContent(e1, e2, Eta1Eff.GetEfficiency(e1)*Eta2Eff.GetEfficiency(e2))
+
         print "Writing TEfficiency histos... ",
 
         outfile = ROOT.TFile("eff_rAdvCnC_"+dataset+".root", "recreate")
         outfile.cd()
         ROOT.gFile = outfile
+        ROOT.gStyle.SetPaintTextFormat("0.4f")
         EtaEtaEff.Write("EtaEtaEfficiency")
         ZPtEtaEff.Write("ZPtEtaEfficiency")
         EtaEtaJustElesEff.Write("EtaEtaJustElesEff")
+        Eta1Eff.Write("Eta1Eff")
+        Eta2Eff.Write("Eta2Eff")
+        MangledEtaEtaEff.Write()
 
         print "EtaEtaEff ",
         eee_canv = ROOT.TCanvas("EtaEtaEff_"+dataset, "EtaEtaEff_"+dataset, 800, 600)
@@ -103,11 +131,16 @@ def make_efficiencies_simple(sets):
         EtaEtaJustElesEff.Draw("colz text")
         je_canv.Write("EtaEtaJEEff.png")
 
+        print "Mangled"
+        mang_canv = ROOT.TCanvas("MangledEtaEta_"+dataset, "MangledEtaEta_"+dataset, 800, 600)
+        MangledEtaEtaEff.Draw("colz text")
+        mang_canv.Write("MangledEtaEtaEff.png")
+
         outfile.Close()
         print "Done!"
 
 def main():
-#    combine_root_files(datasets)
+    combine_root_files(datasets)
     make_efficiencies_simple(datasets)
     return
 

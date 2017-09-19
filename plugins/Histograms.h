@@ -16,4 +16,7 @@ Double_t ptBins[nPtBins+1] = {0.0, 15.0, 25.0, 35.0, 50.0, 75.0, 100.0, 150.0, 2
 const Int_t nEtaBins = 10;
 Double_t etaBins[nEtaBins+1] = {-2.5, -2.0, -1.6, -1.4, -0.8, 0.0, 0.8, 1.4, 1.6, 2.0, 2.5};
 
+const Int_t nPhiBins = 12;
+Double_t phiBins[nPhiBins+1] = {0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6};
+
 #endif // HISTOGRAMS_H

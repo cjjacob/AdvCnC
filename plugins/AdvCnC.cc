@@ -85,6 +85,8 @@ class AdvCnC : public edm::one::EDAnalyzer<edm::one::SharedResources>  {
   EDGetTokenT<ElectronCollection> electrons_;
   EDGetTokenT<TriggerObjectStandAloneCollection> objects_;
   EDGetTokenT<TriggerResults> results_;
+  EDGetTokenT<BeamSpot> beamspot_;
+  EDGetTokenT<double> rho_;
 
   string triggerName, pathFilterLeg1, pathFilterLeg2, refTrigName, refFilter;
 
@@ -136,6 +138,17 @@ class AdvCnC : public edm::one::EDAnalyzer<edm::one::SharedResources>  {
   TH1D* nTriggerRun;
   TH1D* nTriggerAccept;
 
+  TH2D* ElesGoodEtaEta;
+  TH2D* ElectronsEtaEta;
+  TH3D* ZEtaEtaEta;
+  TH3D* ZPtEtaPhi_all;
+  TH3D* ZPtEtaPhi_pm1;
+  TH3D* ZPtEtaPhi_pm2;
+  TH3D* ZPPzM_all;
+  TH3D* ZPPzM_pm1;
+  TH3D* ZPPzM_pm2;
+  
+
   size_t triggerIndex;
 
   unsigned long nTrigFound, nTrigRun, nTrigAccept;
@@ -156,6 +169,8 @@ AdvCnC::AdvCnC(const edm::ParameterSet& iConfig)
   : electrons_(consumes<ElectronCollection>(iConfig.getParameter<InputTag>("electrons")))
   , objects_(consumes<TriggerObjectStandAloneCollection>(iConfig.getParameter<InputTag>("objects")))
   , results_(consumes<TriggerResults>(iConfig.getParameter<InputTag>("results")))
+  , beamspot_(consumes<BeamSpot>(iConfig.getParameter<InputTag>("beamspot")))
+  , rho_(consumes<double>(iConfig.getParameter<InputTag>("rho")))
 {
    //now do what ever initialization is needed
    usesResource("TFileService");
@@ -187,6 +202,8 @@ AdvCnC::~AdvCnC()
 void
 AdvCnC::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 {
+  //cout << "Looping...\n";
+
   nEvents->Fill(1);
 
   Handle<ElectronCollection> electrons;
@@ -198,6 +215,12 @@ AdvCnC::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 
   Handle<TriggerResults> results;
   iEvent.getByToken(results_, results);
+
+  Handle<BeamSpot> beamspot;
+  iEvent.getByToken(beamspot_, beamspot);
+
+  Handle<double> rho;
+  iEvent.getByToken(rho_, rho);
 
   const TriggerNames TrigNames = iEvent.triggerNames(*results);
 
@@ -212,6 +235,8 @@ AdvCnC::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
     return;
   }
 
+  //cout << "a\n";
+
   vector<int> EMtypes; EMtypes.push_back(82); EMtypes.push_back(92);
   vector<TriggerObjectStandAlone> EMObjects = FilterObjectsByType(*objects, EMtypes);
 
@@ -222,9 +247,49 @@ AdvCnC::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
   nTrigObjsFilt->Fill(filterObjs.size());
   nTrigObjsPath->Fill(pathObjs.size());
 
+  //cout << "b\n";
+
   vector<Electron> goodElectrons = GoodElectrons(*electrons);
   vector<Electron> ptCutElectrons = ElectronsAbovePtThreshold(goodElectrons);
-  vector<Electron> mediumIDptCutEles = ApplyMediumID(ptCutElectrons);
+  vector<Electron> mediumIDptCutEles = ApplyMediumID(ptCutElectrons, *rho);
+  
+  if ( goodElectrons.size() ) {
+    for ( size_t iEle = 0; iEle < goodElectrons.size()-1; ++iEle ) {
+      for ( size_t jEle = iEle+1; jEle < goodElectrons.size(); ++jEle ) {
+	ElesGoodEtaEta->Fill(goodElectrons.at(iEle).eta(), goodElectrons.at(jEle).eta());
+      }
+    }
+  }
+
+  if ( mediumIDptCutEles.size() ) {
+    for ( size_t iEle = 0; iEle < mediumIDptCutEles.size()-1; ++iEle ) {
+      for ( size_t jEle = iEle+1; jEle < mediumIDptCutEles.size(); ++jEle ) {
+	//cout << iEle << "," << jEle << "\n";
+	ElectronsEtaEta->Fill(mediumIDptCutEles.at(iEle).eta(), mediumIDptCutEles.at(jEle).eta());
+      }
+    }
+  }
+
+  //cout << "c\n";
+
+  vector<ZBoson> Zmedpt = ZCands(mediumIDptCutEles);
+  for ( ZBoson z : Zmedpt ) {
+    auto e0 = z.Daughters.at(0);
+    auto e1 = z.Daughters.at(1);
+    ZEtaEtaEta->Fill(z.Z.Eta(), e0.Eta(), e1.Eta());
+    ZPtEtaPhi_all->Fill(z.Z.Pt(), z.Z.Eta(), z.Z.Phi());
+    ZPPzM_all->Fill(z.Z.P(), z.Z.Pz(), z.Z.M());
+    if ( fabs(e0.Eta() - e1.Eta()) >= 1.0 ) {
+      ZPtEtaPhi_pm1->Fill(z.Z.Pt(), z.Z.Eta(), z.Z.Phi());
+      ZPPzM_pm1->Fill(z.Z.P(), z.Z.Pz(), z.Z.M());
+    }
+    if ( fabs(e0.Eta() - e1.Eta()) >= 2.0 ) {
+      ZPtEtaPhi_pm2->Fill(z.Z.Pt(), z.Z.Eta(), z.Z.Phi());
+      ZPPzM_pm2->Fill(z.Z.P(), z.Z.Pz(), z.Z.M());
+    }
+  }
+
+  //cout << "d\n";
 
   nGoodEles->Fill(goodElectrons.size());
   nElesAbovePt->Fill(ptCutElectrons.size());
@@ -275,6 +340,8 @@ AdvCnC::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
     } // trig accept
   } // trig run
 
+  //cout << "e\n";
+
   vector< pair<Electron,TLorentzVector> > matchedEles = MatchElesWithObjs(mediumIDptCutEles, filterObjs);
   nElesMatched->Fill(matchedEles.size());
 
@@ -298,12 +365,14 @@ AdvCnC::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
     }
   }
 
+  //cout << "f\n";
+
   // vector<ZBoson> matchedZs = MatchedZCands(matchedEles);
 
   if ( results->wasrun(triggerIndex) ) {
     vector<TriggerObjectStandAlone> refObjs = ObjectsWithPath(EMObjects, TrigNames, refTrigName+"*");
     vector< pair<Electron,TLorentzVector> > matchedRef = MatchElesWithObjs(goodElectrons, refObjs);
-    vector< pair<Electron,TriggerObjectStandAlone> > ObjMatchedEles = MatchElesWithFullObjs(goodElectrons, EMObjects);
+    vector< pair<Electron,TriggerObjectStandAlone> > ObjMatchedEles = MatchElesWithFullObjs(mediumIDptCutEles, EMObjects);
     if ( matchedRef.size() > 0 ) {
       for ( auto refEle : matchedRef ) {
 	for ( auto oEle : ObjMatchedEles ) {
@@ -331,6 +400,8 @@ AdvCnC::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
     }
   }
 
+  //cout << "g\n";
+
 }
 
 
@@ -344,6 +415,7 @@ AdvCnC::beginJob()
   TFileDirectory Numbers    = fs->mkdir("Numbers");
   TFileDirectory JustEles   = fs->mkdir("JustEles");
   TFileDirectory SingleLeg  = fs->mkdir("SingleLeg");
+  TFileDirectory ZStuff     = fs->mkdir("ZStuff");
 
   nEventEles = Numbers.make<TH1D>("nEventEles", "Num. of Electrons;#", 7, -0.5, 6.5);
   nGoodEles = Numbers.make<TH1D>("nGoodEles", "Num. of Electrons |#eta| < 2.5, E_{T} > 5 GeV;#", 7, -0.5, 6.5);
@@ -384,14 +456,25 @@ AdvCnC::beginJob()
   MPass_noPtCut = NoPtCut.make<TH1D>("MPass_noPtCut", "Z mass Pass;m_{Z}", nMassBins, massBins);
   MFail_noPtCut = NoPtCut.make<TH1D>("MFail_noPtCut", "Z mass Fail;m_{Z}", nMassBins, massBins);
 
-  EtaEtaZPt = JustEles.make<TH3D>("EtaEtaZPt", "#eta #eta p_{T,Z};#eta_{e1};#eta_{e2};p_{T,Z} (GeV)", nEtaBins, etaBins, nEtaBins, etaBins, nPtBins, ptBins);
-  EtaEtaZPz = JustEles.make<TH3D>("EtaEtaZPz", "#eta #eta p_{z,Z};#eta_{e1};#eta_{e2};p_{z,Z} (GeV)", nEtaBins, etaBins, nEtaBins, etaBins, nPtBins, ptBins);
-  EtaEtaZP  = JustEles.make<TH3D>("EtaEtaZP",  "#eta #eta p_{Z};#eta_{e1};#eta_{e2};p_{Z} (GeV)",     nEtaBins, etaBins, nEtaBins, etaBins, nPtBins, ptBins);
+  EtaEtaZPt = ZStuff.make<TH3D>("EtaEtaZPt", "#eta #eta p_{T,Z};#eta_{e1};#eta_{e2};p_{T,Z} (GeV)", nEtaBins, etaBins, nEtaBins, etaBins, nPtBins, ptBins);
+  EtaEtaZPz = ZStuff.make<TH3D>("EtaEtaZPz", "#eta #eta p_{z,Z};#eta_{e1};#eta_{e2};p_{z,Z} (GeV)", nEtaBins, etaBins, nEtaBins, etaBins, nPtBins, ptBins);
+  EtaEtaZP  = ZStuff.make<TH3D>("EtaEtaZP",  "#eta #eta p_{Z};#eta_{e1};#eta_{e2};p_{Z} (GeV)",     nEtaBins, etaBins, nEtaBins, etaBins, nPtBins, ptBins);
 
   EtaEtaMPass_SingleLeg1 = SingleLeg.make<TH3D>("EtaEtaMPass_SingleLeg1", "Leg 1 #eta_{tag} #eta_{probe} Pass;#eta_{tag};#eta_{probe};m_{ee} (GeV)", nEtaBins, etaBins, nEtaBins, etaBins, nMassBins, massBins);
   EtaEtaMFail_SingleLeg1 = SingleLeg.make<TH3D>("EtaEtaMFail_SingleLeg1", "Leg 1 #eta_{tag} #eta_{probe} Fail;#eta_{tag};#eta_{probe};m_{ee} (GeV)", nEtaBins, etaBins, nEtaBins, etaBins, nMassBins, massBins);
   EtaEtaMPass_SingleLeg2 = SingleLeg.make<TH3D>("EtaEtaMPass_SingleLeg2", "Leg 2 #eta_{tag} #eta_{probe} Pass;#eta_{tag};#eta_{probe};m_{ee} (GeV)", nEtaBins, etaBins, nEtaBins, etaBins, nMassBins, massBins);
   EtaEtaMFail_SingleLeg2 = SingleLeg.make<TH3D>("EtaEtaMFail_SingleLeg2", "Leg 2 #eta_{tag} #eta_{probe} Fail;#eta_{tag};#eta_{probe};m_{ee} (GeV)", nEtaBins, etaBins, nEtaBins, etaBins, nMassBins, massBins);
+
+  ElesGoodEtaEta = ZStuff.make<TH2D>("ElesGoodEtaEta", "#eta_{e_{1}} #eta_{e_{2}};#eta_{1};#eta_{2}", nEtaBins, etaBins, nEtaBins, etaBins);
+  ElectronsEtaEta = ZStuff.make<TH2D>("ElectronsEtaEta", "#eta_{e_{1}} #eta_{e_{2}};#eta_{1};#eta_{2}", nEtaBins, etaBins, nEtaBins, etaBins);
+  ZEtaEtaEta = ZStuff.make<TH3D>("ZEtaEtaEta", "#eta_{Z} #eta_{e_{1}} #eta_{e_{2}};#eta_{Z};#eta_{1};#eta_{2}", nEtaBins, etaBins, nEtaBins, etaBins, nEtaBins, etaBins);
+  ZPtEtaPhi_all = ZStuff.make<TH3D>("ZPtEtaPhi_all", "p_{T,Z} #eta_{Z} #phi_{Z};p_{T,Z} (GeV);#eta_{Z};#phi_{Z}", nPtBins, ptBins, nEtaBins, etaBins, nPhiBins, phiBins);
+  ZPtEtaPhi_pm1 = ZStuff.make<TH3D>("ZPtEtaPhi_pm1", "p_{T,Z} #eta_{Z} #phi_{Z};p_{T,Z} (GeV);#eta_{Z};#phi_{Z}", nPtBins, ptBins, nEtaBins, etaBins, nPhiBins, phiBins);
+  ZPtEtaPhi_pm2 = ZStuff.make<TH3D>("ZPtEtaPhi_pm2", "p_{T,Z} #eta_{Z} #phi_{Z};p_{T,Z} (GeV);#eta_{Z};#phi_{Z}", nPtBins, ptBins, nEtaBins, etaBins, nPhiBins, phiBins);
+  ZPPzM_all = ZStuff.make<TH3D>("ZPPzM_all", "p_{Z} p_{z,Z} m_{Z};p_{Z} (GeV);p_{z,Z} (GeV);m_{Z} (GeV)", nPtBins, ptBins, nPtBins, ptBins, nMassBins, massBins);
+  ZPPzM_pm1 = ZStuff.make<TH3D>("ZPPzM_pm1", "p_{Z} p_{z,Z} m_{Z};p_{Z} (GeV);p_{z,Z} (GeV);m_{Z} (GeV)", nPtBins, ptBins, nPtBins, ptBins, nMassBins, massBins);
+  ZPPzM_pm2 = ZStuff.make<TH3D>("ZPPzM_pm2", "p_{Z} p_{z,Z} m_{Z};p_{Z} (GeV);p_{z,Z} (GeV);m_{Z} (GeV)", nPtBins, ptBins, nPtBins, ptBins, nMassBins, massBins);
+
 
 }
 
